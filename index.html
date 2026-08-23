@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DeepSeek AI 聊天</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: #1a1a2e;
+            color: white;
+            padding: 16px 20px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .header .api-status {
+            font-size: 11px;
+            font-weight: normal;
+            margin-top: 4px;
+            color: #4ade80;
+        }
+        
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .message {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.5;
+            font-size: 15px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        
+        .message.user {
+            align-self: flex-end;
+            background: #2563eb;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.assistant {
+            align-self: flex-start;
+            background: white;
+            color: #1a1a2e;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .message.system {
+            align-self: center;
+            background: #e5e7eb;
+            color: #6b7280;
+            font-size: 13px;
+            padding: 8px 14px;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+            padding: 16px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            position: sticky;
+            bottom: 0;
+        }
+        
+        #apiKeyInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 24px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        #apiKeyInput:focus {
+            border-color: #2563eb;
+        }
+        
+        #sendBtn {
+            padding: 12px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        #sendBtn:active {
+            background: #1d4ed8;
+        }
+        
+        #sendBtn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #2563eb;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .settings-bar {
+            padding: 8px 16px;
+            background: #f9fafb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+        
+        .settings-bar input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+        
+        .model-select {
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            font-size: 13px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        🤖 DeepSeek AI 聊天
+        <div class="api-status" id="apiStatus">未设置 API Key</div>
+    </div>
+    
+    <div class="settings-bar">
+        <span>API Key:</span>
+        <input type="password" id="apiKey" placeholder="粘贴你的 DeepSeek API Key" 
+               oninput="saveApiKey(this.value)">
+        <select class="model-select" id="modelSelect" onchange="saveModel(this.value)">
+            <option value="deepseek-chat">deepseek-chat</option>
+            <option value="deepseek-reasoner">deepseek-reasoner</option>
+        </select>
+    </div>
+    
+    <div class="chat-container" id="chatContainer">
+        <div class="message system">你好！我是 DeepSeek AI 助手。请先在顶部输入你的 API Key 开始对话。</div>
+    </div>
+    
+    <div class="input-container">
+        <input type="text" id="messageInput" placeholder="输入消息..." 
+               onkeypress="if(event.key==='Enter') sendMessage()">
+        <button id="sendBtn" onclick="sendMessage()">发送</button>
+    </div>
+
+    <script>
+        // 从 localStorage 恢复设置
+        window.onload = function() {
+            const savedKey = localStorage.getItem('deepseek_api_key');
+            const savedModel = localStorage.getItem('deepseek_model');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+                updateApiStatus(true);
+            }
+            if (savedModel) {
+                document.getElementById('modelSelect').value = savedModel;
+            }
+        };
+        
+        function saveApiKey(key) {
+            localStorage.setItem('deepseek_api_key', key);
+            if (key) {
+                updateApiStatus(true);
+            } else {
+                updateApiStatus(false);
+            }
+        }
+        
+        function saveModel(model) {
+            localStorage.setItem('deepseek_model', model);
+        }
+        
+        function updateApiStatus(hasKey) {
+            const statusEl = document.getElementById('apiStatus');
+            if (hasKey) {
+                statusEl.textContent = '✓ API Key 已设置';
+                statusEl.style.color = '#4ade80';
+            } else {
+                statusEl.textContent = '未设置 API Key';
+                statusEl.style.color = '#f87171';
+            }
+        }
+        
+        function addMessage(content, role) {
+            const container = document.getElementById('chatContainer');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ' + role;
+            msgDiv.textContent = content;
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+            return msgDiv;
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const model = document.getElementById('modelSelect').value;
+            
+            if (!message) return;
+            if (!apiKey) {
+                alert('请先输入你的 DeepSeek API Key');
+                return;
+            }
+            
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            input.value = '';
+            
+            // 显示用户消息
+            addMessage(message, 'user');
+            
+            // 创建 AI 回复占位
+            const aiMsg = addMessage('', 'assistant');
+            aiMsg.innerHTML = '<span class="loading"></span>';
+            
+            try {
+                const response = await fetch('https://api.deepseek.com/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + apiKey
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'user', content: message }
+                        ],
+                        stream: false,
+                        max_tokens: 2000,
+                        temperature: 0.7
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || '请求失败: ' + response.status);
+                }
+                
+                const data = await response.json();
+                const reply = data.choices[0].message.content;
+                aiMsg.textContent = reply;
+                
+            } catch (error) {
+                aiMsg.textContent = '错误: ' + error.message;
+                aiMsg.style.color = '#ef4444';
+            }
+            
+            sendBtn.disabled = false;
+            input.focus();
+            
+            // 滚动到底部
+            const container = document.getElementById('chatContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+    </script>
+</body>
+</html>
