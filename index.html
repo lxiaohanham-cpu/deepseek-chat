@@ -1,0 +1,428 @@
+<script>
+    let chats = [];
+    let currentChatId = null;
+    let currentAbortController = null;
+    
+    // 初始化
+    window.onload = function() {
+        loadChats();
+        loadSettings();
+        renderChatList();
+        if (chats.length === 0) {
+            newChat();
+        } else {
+            currentChatId = chats[0].id;
+            renderMessages();
+        }
+        updateHeader();
+        renderChatList();
+    };
+    
+    function loadSettings() {
+        const savedKey = localStorage.getItem('deepseek_api_key');
+        const savedModel = localStorage.getItem('deepseek_model');
+        if (savedKey) {
+            document.getElementById('apiKey').value = savedKey;
+            updateApiStatus(true);
+        }
+        if (savedModel) {
+            document.getElementById('modelSelect').value = savedModel;
+        }
+    }
+    
+    function saveApiKey(key) {
+        localStorage.setItem('deepseek_api_key', key);
+        updateApiStatus(!!key);
+    }
+    
+    function saveModel(model) {
+        localStorage.setItem('deepseek_model', model);
+    }
+    
+    function updateApiStatus(hasKey) {
+        const statusEl = document.getElementById('apiStatus');
+        statusEl.textContent = hasKey ? '✓ API Key 已设置' : '未设置 API Key';
+        statusEl.style.color = hasKey ? '#4ade80' : '#f87171';
+    }
+    
+    function loadChats() {
+        const saved = localStorage.getItem('deepseek_chats');
+        if (saved) {
+            try {
+                chats = JSON.parse(saved);
+            } catch(e) {
+                chats = [];
+            }
+        }
+    }
+    
+    function saveChats() {
+        localStorage.setItem('deepseek_chats', JSON.stringify(chats));
+    }
+    
+    function newChat() {
+        const chat = {
+            id: Date.now().toString(),
+            title: '新对话',
+            messages: [],
+            createdAt: new Date().toISOString()
+        };
+        chats.unshift(chat);
+        currentChatId = chat.id;
+        saveChats();
+        renderChatList();
+        renderMessages();
+        updateHeader();
+        toggleSidebar(false);
+    }
+    
+    function switchChat(id) {
+        currentChatId = id;
+        renderChatList();
+        renderMessages();
+        updateHeader();
+        toggleSidebar(false);
+    }
+    
+    function getCurrentChat() {
+        return chats.find(c => c.id === currentChatId);
+    }
+    
+    function renderChatList() {
+        const list = document.getElementById('chatList');
+        list.innerHTML = '';
+        chats.forEach(chat => {
+            const item = document.createElement('div');
+            item.className = 'chat-item' + (chat.id === currentChatId ? ' active' : '');
+            item.onclick = () => switchChat(chat.id);
+            
+            const title = document.createElement('span');
+            title.className = 'chat-item-title';
+            title.textContent = chat.title;
+            
+            const actions = document.createElement('div');
+            actions.className = 'chat-item-actions';
+            
+            const renameBtn = document.createElement('button');
+            renameBtn.className = 'chat-item-btn';
+            renameBtn.textContent = '✏️';
+            renameBtn.onclick = (e) => {
+                e.stopPropagation();
+                currentChatId = chat.id;
+                showRenameModal();
+            };
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'chat-item-btn';
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm('删除这个对话？')) {
+                    const index = chats.findIndex(c => c.id === chat.id);
+                    chats.splice(index, 1);
+                    if (currentChatId === chat.id) {
+                        currentChatId = chats.length > 0 ? chats[0].id : null;
+                    }
+                    saveChats();
+                    renderChatList();
+                    if (currentChatId) {
+                        renderMessages();
+                        updateHeader();
+                    } else {
+                        newChat();
+                    }
+                }
+            };
+            
+            actions.appendChild(renameBtn);
+            actions.appendChild(deleteBtn);
+            item.appendChild(title);
+            item.appendChild(actions);
+            list.appendChild(item);
+        });
+    }
+    
+    function renderMessages() {
+        const container = document.getElementById('chatContainer');
+        container.innerHTML = '';
+        const chat = getCurrentChat();
+        if (!chat) return;
+        
+        if (chat.messages.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'message system';
+            empty.textContent = '开始新对话吧！';
+            container.appendChild(empty);
+        } else {
+            chat.messages.forEach(msg => {
+                addMessageToDOM(msg.content, msg.role);
+            });
+        }
+        scrollToBottom();
+    }
+    
+    function addMessageToDOM(content, role) {
+        const container = document.getElementById('chatContainer');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message ' + role;
+        msgDiv.textContent = content;
+        container.appendChild(msgDiv);
+        scrollToBottom();
+        return msgDiv;
+    }
+    
+    function addMessage(content, role) {
+        const chat = getCurrentChat();
+        if (!chat) return;
+        chat.messages.push({ content, role, timestamp: Date.now() });
+        if (chat.title === '新对话' && role === 'user') {
+            chat.title = content.substring(0, 20);
+        }
+        saveChats();
+        addMessageToDOM(content, role);
+        renderChatList();
+        updateHeader();
+    }
+    
+    function scrollToBottom() {
+        const container = document.getElementById('chatContainer');
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+    
+    function updateHeader() {
+        const chat = getCurrentChat();
+        document.getElementById('headerTitle').textContent = chat ? chat.title : '对话';
+    }
+    
+    function toggleSidebar(force) {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        if (force !== undefined) {
+            sidebar.classList.toggle('open', force);
+            overlay.classList.toggle('show', force);
+        } else {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+        }
+    }
+    
+    function showRenameModal() {
+        const chat = getCurrentChat();
+        if (!chat) return;
+        document.getElementById('renameInput').value = chat.title;
+        document.getElementById('renameModal').classList.add('show');
+        setTimeout(() => document.getElementById('renameInput').focus(), 100);
+    }
+    
+    function closeRename() {
+        document.getElementById('renameModal').classList.remove('show');
+    }
+    
+    function confirmRename() {
+        const newTitle = document.getElementById('renameInput').value.trim();
+        if (newTitle) {
+            const chat = getCurrentChat();
+            if (chat) {
+                chat.title = newTitle;
+                saveChats();
+                renderChatList();
+                updateHeader();
+            }
+        }
+        closeRename();
+    }
+    
+    function renameChat() {
+        if (!getCurrentChat()) return;
+        showRenameModal();
+    }
+    
+    function clearChat() {
+        const chat = getCurrentChat();
+        if (!chat) return;
+        if (confirm('清空当前对话的所有消息？')) {
+            chat.messages = [];
+            saveChats();
+            renderMessages();
+        }
+    }
+    
+    function deleteChat() {
+        const chat = getCurrentChat();
+        if (!chat) return;
+        if (confirm('删除当前对话？')) {
+            const index = chats.findIndex(c => c.id === chat.id);
+            chats.splice(index, 1);
+            currentChatId = chats.length > 0 ? chats[0].id : null;
+            saveChats();
+            renderChatList();
+            if (currentChatId) {
+                renderMessages();
+                updateHeader();
+            } else {
+                newChat();
+            }
+        }
+    }
+    
+    function exportChat() {
+        const chat = getCurrentChat();
+        if (!chat || chat.messages.length === 0) {
+            alert('没有可导出的内容');
+            return;
+        }
+        let text = `对话标题: ${chat.title}\n`;
+        text += `导出时间: ${new Date().toLocaleString()}\n`;
+        text += '='.repeat(40) + '\n\n';
+        chat.messages.forEach(msg => {
+            text += `[${msg.role === 'user' ? '我' : 'AI'}]: ${msg.content}\n\n`;
+        });
+        
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('对话已复制到剪贴板');
+            }).catch(() => {
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    }
+    
+    function fallbackCopy(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('对话已复制到剪贴板');
+    }
+    
+    function stopGeneration() {
+        if (currentAbortController) {
+            currentAbortController.abort();
+            currentAbortController = null;
+        }
+    }
+    
+    async function sendMessage() {
+        const input = document.getElementById('messageInput');
+        const message = input.value.trim();
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const model = document.getElementById('modelSelect').value;
+        
+        if (!message) return;
+        if (!apiKey) {
+            alert('请先输入你的 DeepSeek API Key');
+            return;
+        }
+        if (!getCurrentChat()) {
+            newChat();
+        }
+        
+        const sendBtn = document.getElementById('sendBtn');
+        sendBtn.disabled = true;
+        sendBtn.textContent = '⏹';
+        sendBtn.onclick = stopGeneration;
+        input.value = '';
+        input.blur();
+        
+        addMessage(message, 'user');
+        
+        const chat = getCurrentChat();
+        const aiMsgDiv = addMessageToDOM('', 'assistant');
+        aiMsgDiv.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+        
+        currentAbortController = new AbortController();
+        
+        try {
+            const messages = chat.messages.filter(m => m.role !== 'system' && !m.content.startsWith('错误:')).map(m => ({
+                role: m.role,
+                content: m.content
+            }));
+            
+            const response = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + apiKey
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: messages,
+                    stream: true,
+                    max_tokens: 2000,
+                    temperature: 0.7
+                }),
+                signal: currentAbortController.signal
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || '请求失败: ' + response.status);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+            aiMsgDiv.textContent = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        if (data === '[DONE]') continue;
+                        try {
+                            const parsed = JSON.parse(data);
+                            const content = parsed.choices?.[0]?.delta?.content;
+                            if (content) {
+                                fullText += content;
+                                aiMsgDiv.textContent = fullText;
+                                scrollToBottom();
+                            }
+                        } catch(e) {
+                            // 忽略解析错误
+                        }
+                    }
+                }
+            }
+            
+            if (fullText) {
+                chat.messages.push({ content: fullText, role: 'assistant', timestamp: Date.now() });
+                saveChats();
+            }
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                const partialText = aiMsgDiv.textContent;
+                if (partialText && !partialText.includes('loading-dots')) {
+                    aiMsgDiv.textContent = partialText + '\n\n[已停止生成]';
+                    chat.messages.push({ content: partialText + '\n\n[已停止生成]', role: 'assistant', timestamp: Date.now() });
+                    saveChats();
+                } else {
+                    aiMsgDiv.textContent = '[已停止生成]';
+                }
+            } else {
+                aiMsgDiv.textContent = '错误: ' + error.message;
+                aiMsgDiv.classList.add('error-msg');
+                chat.messages.push({ content: '错误: ' + error.message, role: 'assistant', timestamp: Date.now() });
+                saveChats();
+            }
+        }
+        
+        currentAbortController = null;
+        sendBtn.disabled = false;
+        sendBtn.textContent = '发送';
+        sendBtn.onclick = sendMessage;
+        scrollToBottom();
+    }
+</script>
