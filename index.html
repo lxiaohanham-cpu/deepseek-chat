@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>My DeepSeek</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{
+    width:100%;height:100%;overflow:hidden;
+    background:#000;color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+}
+.top-safe{height:env(safe-area-inset-top,44px);background:#000;}
+.top-header{
+    width:100%;height:56px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 16px;background:#000;border-bottom:1px solid #222;z-index:20;
+}
+.header-left{font-size:28px;cursor:pointer;}
+.header-title{position:absolute;left:50%;transform:translateX(-50%);font-size:22px;font-weight:600;}
+.header-right{display:flex;gap:20px;font-size:26px;}
+.icon-btn{cursor:pointer;opacity:0.85;}
+.icon-btn:hover{opacity:1;}
+
+.mask{position:absolute;inset:0;background:rgba(0,0,0,0.55);z-index:30;display:none;}
+.mask.show{display:block;}
+
+/*侧边栏*/
+.sidebar{
+    position:absolute;top:0;left:0;width:280px;height:100%;
+    background:#121824;border-right:1px solid #272f3f;
+    transform:translateX(-100%);transition:0.22s ease;z-index:40;
+    display:flex;flex-direction:column;
+    padding-top:calc(env(safe-area-inset-top,44px)+12px);
+    padding-bottom:calc(env(safe-area-inset-bottom,12px));
+    padding-left:12px;padding-right:12px;
+}
+.sidebar.show{transform:translateX(0);}
+.side-top-buttons{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+.side-top-btn{
+    padding:14px 12px;background:#2a3447;border:none;color:#fff;border-radius:12px;
+    font-size:17px;text-align:center;cursor:pointer;
+}
+.session-list{flex:1;overflow-y:auto;}
+.session-item{
+    padding:11px 10px;border-radius:10px;margin-bottom:6px;
+    background:#1c2433;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+}
+.session-item.active{background:#254488;}
+.session-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.session-op-btn{
+    width:34px;height:34px;border-radius:8px;border:none;background:#34425c;color:#fff;
+    font-size:16px;cursor:pointer;
+}
+.sidebar-bottom{margin-top:10px;padding-top:10px;border-top:1px solid #272f3f;}
+.setting-gear{
+    width:100%;padding:12px;text-align:center;background:#2a3447;border-radius:10px;
+    border:none;color:#fff;font-size:18px;cursor:pointer;
+}
+
+/*设置弹窗*/
+.setting-modal{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:92%;max-width:440px;max-height:85vh;overflow-y:auto;
+    background:#121824;border-radius:20px;z-index:60;padding:22px;
+    display:none;
+}
+.setting-modal.show{display:block;}
+.setting-modal h2{text-align:center;margin-bottom:22px;}
+.set-group{margin-bottom:22px;}
+.set-group h4{margin-bottom:10px;font-size:17px;opacity:0.9;}
+.input-row-set{display:flex;gap:10px;align-items:center;}
+.set-input{
+    flex:1;padding:12px 10px;background:#1c2433;border:1px solid #334158;color:#fff;
+    border-radius:10px;font-size:16px;
+}
+.btn-copy,.btn-save{
+    padding:12px 14px;border-radius:10px;border:none;color:#fff;cursor:pointer;
+}
+.btn-copy{background:#34425c;}
+.btn-save{background:#2563eb;}
+.switch-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:12px 10px;background:#1c2433;border-radius:10px;margin-bottom:8px;
+}
+.switch{width:50px;height:28px;border-radius:14px;background:#333;position:relative;cursor:pointer;}
+.switch.on{background:#2563eb;}
+.switch::after{
+    content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;
+    background:#fff;border-radius:50%;transition:0.2s;
+}
+.switch.on::after{left:25px;}
+.font-size-wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+.font-btn{padding:10px;border-radius:8px;border:none;background:#1c2433;color:#fff;cursor:pointer;}
+.font-btn.active{background:#2563eb;}
+.radio-item{
+    padding:14px 12px;background:#1c2433;border-radius:10px;margin-bottom:8px;
+    display:flex;gap:10px;align-items:center;cursor:pointer;
+}
+.radio-item.active{background:#253b61;border:1px solid #3b63b6;}
+
+/*聊天主界面*/
+.main-wrap{position:absolute;inset:0;display:flex;flex-direction:column;background:#000;}
+.chat-box{flex:1;overflow-y:auto;padding:16px;}
+.welcome-tip{
+    height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#888;font-size:17px;gap:10px;
+}
+.welcome-tip a{color:#63a8ff;text-decoration:none;}
+.message{max-width:94%;margin-bottom:18px;line-height:1.65;white-space:pre-wrap;}
+.user-msg{margin-left:auto;background:#1e1e24;padding:12px 16px;border-radius:12px;width:fit-content;}
+.ai-msg{padding:10px 4px;color:#ddd;}
+
+.input-container{
+    padding:10px 14px;padding-bottom:calc(env(safe-area-inset-bottom,10px)+10px);
+    border-top:1px solid #222;background:#000;flex-shrink:0;
+}
+.toggle-bar{display:flex;gap:12px;margin-bottom:10px;}
+.toggle-btn{
+    padding:7px 14px;border-radius:20px;border:1px solid #334155;
+    background:#12151c;color:#b8c2cc;font-size:14px;cursor:pointer;
+    display:flex;align-items:center;gap:6px;
+}
+.toggle-btn.active{border-color:#4078dd;background:#172238;color:#93b8ff;}
+.input-row{display:flex;gap:10px;align-items:flex-end;}
+textarea{
+    flex:1;background:#17171b;border:1px solid #2e2e36;color:#fff;
+    border-radius:14px;padding:14px 16px;resize:none;min-height:54px;max-height:140px;font-size:16px;
+}
+.add-btn{
+    width:50px;height:50px;border-radius:50%;background:#222;border:none;color:#fff;
+    font-size:24px;flex-shrink:0;cursor:pointer;
+}
+.add-btn:disabled{opacity:0.35;cursor:not-allowed;}
+
+@media (max-height:520px){
+    .input-container{padding-bottom:10px;}
+    .chat-box{height:calc(100vh - 210px);overflow-y:auto;flex:none;}
+}
+*:not(input,textarea,select){touch-action:manipulation;}
+body.light{background:#f7f8fa;color:#111;}
+body.light .top-header{background:#fff;border-color:#ddd;}
+body.light .sidebar{background:#eef1f7;border-color:#ccd3e2;}
+body.light .setting-modal{background:#eef1f7;color:#111;}
+body.light .input-container{background:#fff;border-color:#ddd;}
+body.light textarea{background:#f3f5f9;border:#d8dce6;color:#111;}
+body.light .session-item{background:#dde2ee;color:#111;}
+</style>
+</head>
+<body>
+<div class="main-wrap">
+    <div class="top-safe"></div>
+    <div class="top-header">
+        <div class="header-left icon-btn" id="menuBtn">☰</div>
+        <div class="header-title">My DeepSeek</div>
+        <div class="header-right">
+            <span class="icon-btn" id="newChatIcon">+</span>
+            <span class="icon-btn">🔍</span>
+        </div>
+    </div>
+
+    <div class="mask" id="mask"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="side-top-buttons">
+            <button class="side-top-btn">指令市场</button>
+            <button class="side-top-btn">指令管理</button>
+            <button class="side-top-btn">角色卡管理</button>
+        </div>
+        <div class="session-list" id="sessionList"></div>
+        <div class="sidebar-bottom">
+            <button class="setting-gear" id="openSettingBtn">⚙ 设置</button>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div class="setting-modal" id="settingModal">
+        <h2>设置</h2>
+        <div class="set-group">
+            <h4>API Key</h4>
+            <div class="input-row-set">
+                <input class="set-input" id="apiKeyInput" placeholder="DeepSeek API Key">
+                <button class="btn-copy" id="copyApiBtn">复制</button>
+                <button class="btn-save" id="saveApiBtn">保存</button>
+            </div>
+        </div>
+        <div class="set-group">
+            <h4>外观</h4>
+            <div class="switch-row">
+                <span>日间模式</span>
+                <div class="switch" id="themeSwitch"></div>
+            </div>
+        </div>
+        <div class="set-group">
+            <h4>对话框字号</h4>
+            <div class="font-size-wrap" id="fontWrap">
+                <button class="font-btn" data-size="14">小</button>
+                <button class="font-btn active" data-size="15">较小</button>
+                <button class="font-btn" data-size="16">默认</button>
+                <button class="font-btn" data-size="17">较大</button>
+                <button class="font-btn" data-size="18">大</button>
+            </div>
+        </div>
+        <div class="set-group">
+            <h4>模型选择</h4>
+            <div class="radio-item active" data-model="deepseek-chat">V4‑Flash 正式版（快速模式）</div>
+            <div class="radio-item" data-model="deepseek‑r1">V4‑Pro 预览版（专家模式）</div>
+        </div>
+        <div class="set-group">
+            <h4>记忆策略</h4>
+            <div class="radio-item active" data‑mem="slide">滑动窗口摘要（保留最近20条）</div>
+            <div class="radio-item" data‑mem="full">全量发送</div>
+        </div>
+        <div class="set-group">
+            <h4>存储管理</h4>
+            <div style="opacity:0.7;font‑size:14px;">本地存储数据保存在浏览器本地</div>
+        </div>
+    </div>
+
+    <div class="chat‑box" id="chatBox">
+        <div class="welcome‑tip" id="welcomeDom">
+            <div>不知道跟DS老师聊什么？</div>
+            <a href="#">看看指令市场！</a>
+        </div>
+    </div>
+
+    <div class="input‑container">
+        <div class="toggle‑bar">
+            <button class="toggle‑btn" id="toggleThink">
+                <span>✦</span>深度思考
+            </button>
+            <button class="toggle‑btn" id="toggleWeb">
+                <span>🖥</span>预览网页
+            </button>
+        </div>
+        <div class="input‑row">
+            <textarea id="promptInput" placeholder="输入消息…"></textarea>
+            <button class="add‑btn" id="sendBtn">+</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const STORAGE_KEY = "mydeepseek_full";
+let state = {
+    sessions:[],
+    currentSessionId:null,
+    apiKey:"",
+    thinkMode:false,
+    webPreview:false,
+    theme:"dark",
+    fontSize:15,
+    model:"deepseek‑chat",
+    memMode:"slide", // slide滑动窗口 / full全量
+    slideKeep:20
+};
+const sidebar = document.getElementById("sidebar");
+const mask = document.getElementById("mask");
+const chatBox = document.getElementById("chatBox");
+const welcomeDom = document.getElementById("welcomeDom");
+const promptInput = document.getElementById("promptInput");
+const settingModal = document.getElementById("settingModal");
+
+//侧边栏
+function openSidebar(){sidebar.classList.add("show");mask.classList.add("show");}
+function closeSidebar(){sidebar.classList.remove("show");mask.classList.remove("show");}
+document.getElementById("menuBtn").onclick = openSidebar;
+
+//设置弹窗
+document.getElementById("openSettingBtn").onclick = ()=>{
+    mask.classList.add("show");
+    settingModal.classList.add("show");
+};
+mask.onclick = ()=>{
+    mask.classList.remove("show");
+    settingModal.classList.remove("show");
+    closeSidebar();
+};
+
+//主题切换
+const themeSwitch = document.getElementById("themeSwitch");
+themeSwitch.onclick = ()=>{
+    state.theme = state.theme==="dark"?"light":"dark";
+    themeSwitch.classList.toggle("on", state.theme==="light");
+    document.body.classList.toggle("light", state.theme==="light");
+    saveLocal();
+};
+
+//字号
+document.querySelectorAll("#fontWrap .font-btn").forEach(btn=>{
+    btn.onclick = function(){
+        document.querySelectorAll("#fontWrap .font-btn").forEach(b=>b.classList.remove("active"));
+        this.classList.add("active");
+        state.fontSize = Number(this.dataset.size);
+        chatBox.style.fontSize = state.fontSize+"px";
+        saveLocal();
+    }
+});
+
+//API Key操作
+document.getElementById("copyApiBtn").onclick = ()=>{
+    navigator.clipboard.writeText(document.getElementById("apiKeyInput").value);
+};
+document.getElementById("saveApiBtn").onclick = ()=>{
+    state.apiKey = document.getElementById("apiKeyInput").value.trim();
+    saveLocal();
+    alert("已保存");
+};
+
+//深度思考开关
+document.getElementById("toggleThink").onclick = function(){
+    state.thinkMode = !state.thinkMode;
+    this.classList.toggle("active", state.thinkMode);
+    saveLocal();
+};
+document.getElementById("toggleWeb").onclick = function(){
+    state.webPreview = !state.webPreview;
+    this.classList.toggle("active", state.webPreview);
+    saveLocal();
+};
+
+//本地存储
+function loadLocal(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) state = JSON.parse(raw);
+    document.getElementById("apiKeyInput").value = state.apiKey||"";
+    document.getElementById("toggleThink").classList.toggle("active", state.thinkMode);
+    document.getElementById("toggleWeb").classList.toggle("active", state.webPreview);
+    themeSwitch.classList.toggle("on", state.theme==="light");
+    document.body.classList.toggle("light", state.theme==="light");
+    chatBox.style.fontSize = state.fontSize+"px";
+    document.querySelectorAll("#fontWrap .font-btn").forEach(b=>{
+        b.classList.toggle("active", Number(b.dataset.size)===state.fontSize);
+    });
+    renderSessionList();
+    if(state.currentSessionId){
+        renderChat(state.currentSessionId);
+    }else{
+        welcomeDom.style.display = "flex";
+    }
+}
+function saveLocal(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+//新建会话
+function createSession(){
+    closeSidebar();
+    const sid = Date.now().toString();
+    state.sessions.push({
+        id:sid,
+        title:"新对话",
+        thinkMode:state.thinkMode,
+        messages:[]
+    });
+    state.currentSessionId = sid;
+    saveLocal();
+    renderSessionList();
+    renderChat(sid);
+}
+document.getElementById("newChatIcon").onclick = createSession;
+
+//删除会话
+function deleteSession(sid){
+    state.sessions = state.sessions.filter(s=>s.id!==sid);
+    if(state.currentSessionId===sid){
+        state.currentSessionId = state.sessions.length>0?state.sessions[0].id:null;
+    }
+    saveLocal();
+    renderSessionList();
+    if(state.currentSessionId) renderChat(state.currentSessionId);
+    else {chatBox.innerHTML="";chatBox.appendChild(welcomeDom);welcomeDom.style.display="flex";}
+}
+
+//会话重命名
+function renameSession(sid){
+    const s = state.sessions.find(x=>x.id===sid);
+    const newName = prompt("重命名会话",s.title);
+    if(newName&&newName.trim()){
+        s.title = newName.trim();
+        saveLocal();renderSessionList();
+    }
+}
+
+//导出会话json
+function exportSession(sid){
+    const s = state.sessions.find(x=>x.id===sid);
+    const blob = new Blob([JSON.stringify(s,null,2)],{type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = s.title+".json";
+    a.click();
+}
+
+//渲染会话列表，带编辑/导出/删除按钮
+function renderSessionList(){
+    const el = document.getElementById("sessionList");
+    el.innerHTML="";
+    state.sessions.forEach(s=>{
+        const div = document.createElement("div");
+        div.className = "session-item"+(state.currentSessionId===s.id?" active":"");
+        const tag = s.thinkMode?"[R1] ":"";
+        div.innerHTML = `
+            <div class="session‑name">${escapeHtml(tag+s.title)}</div>
+            <button class="session‑op-btn btn‑rename">✏</button>
+            <button class="session‑op-btn btn‑export">↓</button>
+            <button class="session‑op-btn btn‑del">×</button>
+        `;
+        div.querySelector(".session‑name").onclick=()=>{
+            state.currentSessionId = s.id;
+            state.thinkMode = s.thinkMode;
+            document.getElementById("toggleThink").classList.toggle("active",state.thinkMode);
+            saveLocal();renderSessionList();renderChat(s.id);closeSidebar();
+        };
+        div.querySelector(".btn‑rename").onclick=(e)=>{e.stopPropagation();renameSession(s.id);};
+        div.querySelector(".btn‑export").onclick=(e)=>{e.stopPropagation();exportSession(s.id);};
+        div.querySelector(".btn‑del").onclick=(e)=>{e.stopPropagation();deleteSession(s.id);};
+        el.appendChild(div);
+    })
+}
+
+function escapeHtml(str){
+    if(!str) return "";
+    return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function renderChat(sid){
+    const ses = state.sessions.find(x=>x.id===sid);
+    chatBox.innerHTML="";
+    if(!ses) return;
+    welcomeDom.style.display="none";
+    ses.messages.forEach(m=>appendMsgDom(m.role,m.content,false));
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function appendMsgDom(role,content){
+    const div = document.createElement("div");
+    div.className = role==="user"?"message user‑msg":"message ai‑msg";
+    div.innerText = content;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return div;
+}
+
+function updateTitle(sid,text){
+    const s = state.sessions.find(x=>x.id===sid);
+    if(s.title==="新对话"){
+        s.title = text.slice(0,24);
+        saveLocal();renderSessionList();
+    }
+}
+
+//记忆策略处理：滑动窗口裁剪历史
+function getTrimHistory(msgArr){
+    if(state.memMode==="full") return [...msgArr];
+    if(msgArr.length<=state.slideKeep) return [...msgArr];
+    return msgArr.slice(-state.slideKeep);
+}
+
+async function sendChat(){
+    const apiKey = state.apiKey;
+    const text = promptInput.value.trim();
+    const sendBtn = document.getElementById("sendBtn");
+    if(!text) return;
+    if(!apiKey){alert("请在侧边栏设置填入DeepSeek API Key");return;}
+    if(!state.currentSessionId) createSession();
+    const ses = state.sessions.find(x=>x.id===state.currentSessionId);
+    ses.messages.push({role:"user",content:text});
+    updateTitle(ses.id,text);
+    saveLocal();
+    renderChat(ses.id);
+    promptInput.value="";
+    sendBtn.disabled=true;
+
+    const modelName = ses.thinkMode ? "deepseek‑r1" : "deepseek‑chat";
+    const history = getTrimHistory([...ses.messages]);
+    let aiDom = appendMsgDom("assistant","");
+    let fullText = "";
+
+    try{
+        const resp = await fetch("https://api.deepseek.com/v1/chat/completions",{
+            method:"POST",
+            headers:{"Content‑Type":"application/json","Authorization":`Bearer ${apiKey}`},
+            body:JSON.stringify({model:modelName,messages:history,stream:true})
+        })
+        if(!resp.ok) throw new Error("HTTP "+resp.status);
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder("utf‑8");
+        while(true){
+            const {done,value} = await reader.read();
+            if(done) break;
+            const chunk = decoder.decode(value);
+            const lines = chunk.split("\n").filter(l=>l.startsWith("data: ")&&l.trim()!="data: [DONE]");
+            for(let line of lines){
+                const jsonStr = line.replace("data: ","");
+                try{
+                    const obj = JSON.parse(jsonStr);
+                    const delta = obj.choices?.[0]?.delta?.content;
+                    if(delta){
+                        fullText += delta;
+                        aiDom.innerText = fullText;
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                    }
+                }catch(e){}
+            }
+        }
+        ses.messages.push({role:"assistant",content:fullText});
+        saveLocal();
+    }catch(err){
+        aiDom.innerText = "请求失败："+err.message+"\n检查Key、余额、网络";
+    }
+    sendBtn.disabled=false;
+}
+
+document.getElementById("sendBtn").onclick = sendChat;
+promptInput.onkeydown = function(e){
+    if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}
+}
+
+loadLocal();
+</script>
+</body>
+</html>
